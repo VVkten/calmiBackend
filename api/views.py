@@ -3,17 +3,20 @@ from rest_framework.response import Response
 from rest_framework.exceptions import AuthenticationFailed
 from .serializers import UserSerializer
 from .models import User
-import jwt
 import datetime
 from dotenv import load_dotenv
 import os
+from rest_framework.permissions import IsAuthenticated
+from rest_framework import status
+from .models import Exercise
+from .serializers import ExerciseSerializer
+import jwt
+
+
+secret = os.getenv("SECRET")
 
 load_dotenv()
 
-# Завантажуємо секретний ключ з файлу .env
-secret = os.getenv("SECRET")
-
-# Клас для реєстрації користувача
 class RegisterView(APIView):
     def post(self, request):
         serializer = UserSerializer(data=request.data)
@@ -21,7 +24,6 @@ class RegisterView(APIView):
         serializer.save()
         return Response(serializer.data)
 
-# Клас для входу користувача
 class LoginView(APIView):
     def post(self, request):
         email = request.data['email']
@@ -29,9 +31,11 @@ class LoginView(APIView):
 
         user = User.objects.filter(email=email).first()
 
-        if user is None:
-            raise AuthenticationFailed('User not found')
+        # Перевірка, чи є користувач з таким імейлом
+        if not user:
+            return Response({"error": "Email not found"}, status=status.HTTP_404_NOT_FOUND)
 
+        # Перевірка пароля
         if not user.check_password(password):
             raise AuthenticationFailed('Incorrect password')
 
@@ -49,19 +53,15 @@ class LoginView(APIView):
         response.data = {'jwt': token}
         return response
 
-# Клас для отримання інформації про користувача
 class UserView(APIView):
     def get(self, request):
-        # Отримуємо токен з заголовку "Authorization"
         token = request.headers.get('Authorization')
 
         if not token:
             raise AuthenticationFailed('Unauthenticated!')
 
         try:
-            # Очікуємо, що заголовок виглядатиме як "Bearer <token>"
             token = token.split(' ')[1]
-            # Декодуємо токен і перевіряємо його дійсність
             payload = jwt.decode(token, secret, algorithms=['HS256'])
         except (jwt.ExpiredSignatureError, IndexError):
             raise AuthenticationFailed('Unauthenticated!')
@@ -71,12 +71,56 @@ class UserView(APIView):
         if not user:
             raise AuthenticationFailed('User not found')
 
-        # Повертаємо серіалізовані дані користувача
         serializer = UserSerializer(user)
         return Response(serializer.data)
 
-# Клас для виходу з системи
 class LogoutView(APIView):
     def post(self, request):
-        # Оскільки ми не використовуємо cookies, просто повертаємо повідомлення про вихід
         return Response({"message": "Logged out successfully"})
+
+
+class ExerciseView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        exercises = Exercise.objects.all()
+        serializer = ExerciseSerializer(exercises, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        serializer = ExerciseSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ExerciseDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, exercise_id):
+        try:
+            exercise = Exercise.objects.get(id=exercise_id)
+            serializer = ExerciseSerializer(exercise)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exercise.DoesNotExist:
+            return Response({"error": "Exercise not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    def put(self, request, exercise_id):
+        try:
+            exercise = Exercise.objects.get(id=exercise_id)
+            serializer = ExerciseSerializer(exercise, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exercise.DoesNotExist:
+            return Response({"error": "Exercise not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    def delete(self, request, exercise_id):
+        try:
+            exercise = Exercise.objects.get(id=exercise_id)
+            exercise.delete()
+            return Response({"message": "Exercise deleted"}, status=status.HTTP_204_NO_CONTENT)
+        except Exercise.DoesNotExist:
+            return Response({"error": "Exercise not found"}, status=status.HTTP_404_NOT_FOUND)
