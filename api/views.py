@@ -11,6 +11,9 @@ from rest_framework import status
 from .models import Exercise
 from .serializers import ExerciseSerializer
 import jwt
+from django.shortcuts import get_object_or_404
+from .models import Test, TestResult
+from .serializers import TestSerializer
 
 
 secret = os.getenv("SECRET")
@@ -80,7 +83,7 @@ class LogoutView(APIView):
 
 
 class ExerciseView(APIView):
-    permission_classes = [IsAuthenticated]
+    # permission_classes = [IsAuthenticated]
 
     def get(self, request):
         exercises = Exercise.objects.all()
@@ -96,7 +99,7 @@ class ExerciseView(APIView):
 
 
 class ExerciseDetailView(APIView):
-    permission_classes = [IsAuthenticated]
+    # permission_classes = [IsAuthenticated]
 
     def get(self, request, exercise_id):
         try:
@@ -124,3 +127,48 @@ class ExerciseDetailView(APIView):
             return Response({"message": "Exercise deleted"}, status=status.HTTP_204_NO_CONTENT)
         except Exercise.DoesNotExist:
             return Response({"error": "Exercise not found"}, status=status.HTTP_404_NOT_FOUND)
+
+class TestListView(APIView):
+    """Список всіх тестів"""
+
+    def get(self, request):
+        tests = Test.objects.all()
+        serializer = TestSerializer(tests, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        serializer = TestSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(author=request.user)  # Призначаємо автора
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class TestDetailView(APIView):
+    """Деталі конкретного тесту"""
+
+    def get(self, request, test_id):
+        test = get_object_or_404(Test, id=test_id)
+        serializer = TestSerializer(test)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class TestResultView(APIView):
+    """Обчислення результату тесту"""
+
+    def post(self, request, test_id):
+        test = get_object_or_404(Test, id=test_id)
+        user_answers = request.data.get("answers", [])  # Список відповідей
+
+        total_score = sum(answer["points"] for answer in user_answers)
+
+        # Шукаємо відповідний результат
+        result = TestResult.objects.filter(
+            test=test,
+            min_score__lte=total_score,
+            max_score__gte=total_score
+        ).first()
+
+        if result:
+            return Response({"result": result.result_text}, status=status.HTTP_200_OK)
+        return Response({"error": "Результат не знайдено"}, status=status.HTTP_404_NOT_FOUND)
