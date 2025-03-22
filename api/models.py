@@ -1,4 +1,7 @@
+import uuid
+
 from django.db import models
+from django.db.models import JSONField
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 
 
@@ -51,7 +54,6 @@ class Exercise(models.Model):
     def __str__(self):
         return self.name
 
-# Модель Category
 class Category(models.Model):
     """ Модель категорії як для статей так і для вправ чи тестів """
     title = models.CharField(max_length=255)
@@ -60,7 +62,6 @@ class Category(models.Model):
     def __str__(self):
         return self.title
 
-# Модель Article
 class Article(models.Model):
     """ Стаття """
     title = models.CharField(max_length=255)
@@ -71,3 +72,41 @@ class Article(models.Model):
 
     def __str__(self):
         return self.title
+
+class Test(models.Model):
+    title = models.CharField(max_length=255)
+    description = models.TextField()
+    tags = models.CharField(max_length=255, blank=True, null=True)
+    author = models.CharField(max_length=255, default=uuid.uuid4, editable=False)
+    # author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='tests')
+    certificate = models.BooleanField(default=False)
+    certificate_type = models.CharField(max_length=255, blank=True, null=True)
+    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, related_name='tests')
+
+    def __str__(self):
+        return self.title
+
+
+class Question(models.Model):
+    text = models.TextField()
+    test = models.ForeignKey(Test, on_delete=models.CASCADE, related_name='questions')
+
+    def __str__(self):
+        return self.text[:50]
+
+
+class Answer(models.Model):
+    text = models.CharField(max_length=255)
+    score = models.IntegerField(choices=[(i, str(i)) for i in range(1, 6)])
+    question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='answers')
+
+    def __str__(self):
+        return f"{self.text} ({self.score} балів)"
+
+
+class ResultTest(models.Model):
+    test = models.ForeignKey(Test, on_delete=models.CASCADE, related_name='results')
+    result_data = JSONField()
+
+    def __str__(self):
+        return f"Result for {self.test.title}"
