@@ -12,8 +12,10 @@ from .models import Exercise
 from .serializers import ExerciseSerializer
 import jwt
 from django.shortcuts import get_object_or_404
-from .models import Test, TestResult
-from .serializers import TestSerializer
+from .models import Article, Category
+from .serializers import ArticleSerializer, CategorySerializer
+# from .models import Test, TestResult
+# from .serializers import TestSerializer
 
 
 secret = os.getenv("SECRET")
@@ -42,7 +44,7 @@ class LoginView(APIView):
         if not user.check_password(password):
             raise AuthenticationFailed('Incorrect password')
 
-        # Генерація JWT токену з ідентифікатором користувача та терміном дії
+        # Генерація JWT токену
         payload = {
             'id': user.id,
             'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=60),
@@ -128,47 +130,80 @@ class ExerciseDetailView(APIView):
         except Exercise.DoesNotExist:
             return Response({"error": "Exercise not found"}, status=status.HTTP_404_NOT_FOUND)
 
-class TestListView(APIView):
-    """Список всіх тестів"""
+class ArticleView(APIView):
+    # permission_classes = [IsAuthenticated]
 
-    def get(self, request):
-        tests = Test.objects.all()
-        serializer = TestSerializer(tests, many=True)
+    def get(self, request, article_id=None):
+        if article_id:
+            article = get_object_or_404(Article, id=article_id)
+            serializer = ArticleSerializer(article)
+        else:
+            articles = Article.objects.all()
+            serializer = ArticleSerializer(articles, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def post(self, request):
-        serializer = TestSerializer(data=request.data)
+        serializer = ArticleSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
-            serializer.save(author=request.user)  # Призначаємо автора
+            serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    def put(self, request, article_id):
+        article = get_object_or_404(Article, id=article_id)
+        serializer = ArticleSerializer(article, data=request.data, partial=False)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-class TestDetailView(APIView):
-    """Деталі конкретного тесту"""
+    def patch(self, request, article_id):
+        article = get_object_or_404(Article, id=article_id)
+        serializer = ArticleSerializer(article, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    def get(self, request, test_id):
-        test = get_object_or_404(Test, id=test_id)
-        serializer = TestSerializer(test)
+    def delete(self, request, article_id):
+        article = get_object_or_404(Article, id=article_id)
+        article.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+class CategoryView(APIView):
+    def get(self, request, category_id=None):
+        if category_id:
+            category = get_object_or_404(Category, id=category_id)
+            serializer = CategorySerializer(category)
+        else:
+            categories = Category.objects.all()
+            serializer = CategorySerializer(categories, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+    def post(self, request):
+        serializer = CategorySerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-class TestResultView(APIView):
-    """Обчислення результату тесту"""
+    def put(self, request, category_id):
+        category = get_object_or_404(Category, id=category_id)
+        serializer = CategorySerializer(category, data=request.data, partial=False)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    def post(self, request, test_id):
-        test = get_object_or_404(Test, id=test_id)
-        user_answers = request.data.get("answers", [])  # Список відповідей
+    def patch(self, request, category_id):
+        category = get_object_or_404(Category, id=category_id)
+        serializer = CategorySerializer(category, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        total_score = sum(answer["points"] for answer in user_answers)
-
-        # Шукаємо відповідний результат
-        result = TestResult.objects.filter(
-            test=test,
-            min_score__lte=total_score,
-            max_score__gte=total_score
-        ).first()
-
-        if result:
-            return Response({"result": result.result_text}, status=status.HTTP_200_OK)
-        return Response({"error": "Результат не знайдено"}, status=status.HTTP_404_NOT_FOUND)
+    def delete(self, request, category_id):
+        category = get_object_or_404(Category, id=category_id)
+        category.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

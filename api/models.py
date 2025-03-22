@@ -32,15 +32,16 @@ class User(AbstractUser):
     photo = models.ImageField(upload_to='user_photos/', blank=True, null=True)
 
     USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = []  # Не вимагаємо нічого крім email і пароля
+    REQUIRED_FIELDS = []
 
-    objects = UserManager()  # Призначаємо кастомний менеджер
+    objects = UserManager()
 
     def __str__(self):
-        return self.email  # Для зручного виводу користувача
+        return self.emai
 
 
 class Exercise(models.Model):
+    """ Вправа """
     name = models.CharField(max_length=255)
     category = models.CharField(max_length=255)
     image = models.ImageField(upload_to='exercise_images/')
@@ -50,45 +51,23 @@ class Exercise(models.Model):
     def __str__(self):
         return self.name
 
+# Модель Category
+class Category(models.Model):
+    """ Модель категорії як для статей так і для вправ чи тестів """
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True, null=True)
 
-class Test(models.Model):
-    """Модель тесту"""
-    name = models.CharField(max_length=255)
+    def __str__(self):
+        return self.title
+
+# Модель Article
+class Article(models.Model):
+    """ Стаття """
+    title = models.CharField(max_length=255)
     description = models.TextField()
-    image = models.ImageField(upload_to='test_images/', blank=True, null=True)
-    category = models.CharField(max_length=255)
-    tags = models.TextField(help_text="Введіть теги через кому")
-    author = models.ForeignKey(User, on_delete=models.CASCADE)
+    # author = models.ForeignKey(User, on_delete=models.CASCADE)
+    tags = models.CharField(max_length=255, blank=True, null=True)
+    category = models.ForeignKey(Category, on_delete=models.CASCADE)
 
     def __str__(self):
-        return self.name
-
-
-class Question(models.Model):
-    """Модель питання для тесту"""
-    test = models.ForeignKey(Test, on_delete=models.CASCADE, related_name="questions")
-    text = models.TextField()
-
-    def __str__(self):
-        return self.text
-
-
-class Answer(models.Model):
-    """Модель відповіді на питання"""
-    question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name="answers")
-    text = models.TextField()
-    points = models.IntegerField(default=1)  # Від 1 до 5
-
-    def __str__(self):
-        return f"{self.text} ({self.points} балів)"
-
-
-class TestResult(models.Model):
-    """Модель результатів тесту залежно від суми балів"""
-    test = models.ForeignKey(Test, on_delete=models.CASCADE, related_name="results")
-    min_score = models.IntegerField()
-    max_score = models.IntegerField()
-    result_text = models.TextField()
-
-    def __str__(self):
-        return f"{self.test.name}: {self.min_score} - {self.max_score} балів"
+        return self.title

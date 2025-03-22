@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from .models import User
 from .models import Exercise
-from .models import Test, Question, Answer, TestResult, User
+from .models import User, Category, Article
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -25,33 +25,14 @@ class ExerciseSerializer(serializers.ModelSerializer):
         model = Exercise
         fields = '__all__'
 
-class TestSerializer(serializers.ModelSerializer):
-    author = UserSerializer(read_only=True)
+class CategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Category
+        fields = '__all__'
+
+class ArticleSerializer(serializers.ModelSerializer):
+    # author = serializers.HiddenField(default=serializers.CurrentUserDefault())
 
     class Meta:
-        model = Test
-        fields = ['id', 'name', 'description', 'image', 'category', 'tags', 'author']
-
-
-class QuestionSerializer(serializers.ModelSerializer):
-    test = TestSerializer(read_only=True)
-
-    class Meta:
-        model = Question
-        fields = ['id', 'test', 'text']
-
-
-class AnswerSerializer(serializers.ModelSerializer):
-    question = QuestionSerializer(read_only=True)
-
-    class Meta:
-        model = Answer
-        fields = ['id', 'question', 'text', 'points']
-
-
-class TestResultSerializer(serializers.ModelSerializer):
-    test = TestSerializer(read_only=True)
-
-    class Meta:
-        model = TestResult
-        fields = ['id', 'test', 'min_score', 'max_score', 'result_text']
+        model = Article
+        fields = '__all__'
