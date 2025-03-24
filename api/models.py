@@ -1,5 +1,5 @@
 import uuid
-
+from django.apps import AppConfig
 from django.db import models
 from django.db.models import JSONField
 from django.contrib.auth.models import AbstractUser, BaseUserManager
@@ -40,19 +40,8 @@ class User(AbstractUser):
     objects = UserManager()
 
     def __str__(self):
-        return self.emai
+        return self.email
 
-
-class Exercise(models.Model):
-    """ Вправа """
-    name = models.CharField(max_length=255)
-    category = models.CharField(max_length=255)
-    image = models.ImageField(upload_to='exercise_images/')
-    description = models.TextField()
-    video = models.FileField(upload_to='exercise_videos/', null=True, blank=True)
-
-    def __str__(self):
-        return self.name
 
 class Category(models.Model):
     """ Модель категорії як для статей так і для вправ чи тестів """
@@ -62,11 +51,25 @@ class Category(models.Model):
     def __str__(self):
         return self.title
 
+
+class Exercise(models.Model):
+    """ Вправа """
+    name = models.CharField(max_length=255)
+    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, related_name='exercise')
+    author = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
+    image = models.ImageField(upload_to='exercise_images/')
+    description = models.TextField()
+    video = models.FileField(upload_to='exercise_videos/', null=True, blank=True)
+
+    def __str__(self):
+        return self.name
+
+
 class Article(models.Model):
     """ Стаття """
     title = models.CharField(max_length=255)
     description = models.TextField()
-    # author = models.ForeignKey(User, on_delete=models.CASCADE)
+    author = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
     tags = models.CharField(max_length=255, blank=True, null=True)
     category = models.ForeignKey(Category, on_delete=models.CASCADE)
 
@@ -76,9 +79,9 @@ class Article(models.Model):
 class Test(models.Model):
     title = models.CharField(max_length=255)
     description = models.TextField()
+    image = models.ImageField(upload_to='test_images/', default=None)
     tags = models.CharField(max_length=255, blank=True, null=True)
-    author = models.CharField(max_length=255, default=uuid.uuid4, editable=False)
-    # author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='tests')
+    author = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
     certificate = models.BooleanField(default=False)
     certificate_type = models.CharField(max_length=255, blank=True, null=True)
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, related_name='tests')

@@ -1,8 +1,12 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.exceptions import AuthenticationFailed
-from .serializers import UserSerializer, ExerciseSerializer, ArticleSerializer, CategorySerializer, TestSerializer, TestResultSerializer
-from .models import User, Exercise, Article, Category, Test, ResultTest
+from .serializers import (UserSerializer,
+                          ExerciseSerializer,
+                          ArticleSerializer, CategorySerializer, TestSerializer, TestResultSerializer)
+from .models import (User,
+                     Exercise,
+                     Article, Category, Test, ResultTest)
 import datetime
 from dotenv import load_dotenv
 import os
@@ -98,6 +102,8 @@ class LogoutView(APIView):
 class ExerciseView(APIView):
     def get(self, request, exercise_id=None):
         payload = check_token(request)
+        category_id = request.query_params.get('category_id')  # Отримуємо параметр категорії
+
         if exercise_id:
             try:
                 exercise = Exercise.objects.get(id=exercise_id)
@@ -107,6 +113,10 @@ class ExerciseView(APIView):
                 return Response({"error": "Exercise not found"}, status=status.HTTP_404_NOT_FOUND)
         else:
             exercises = Exercise.objects.all()
+
+            if category_id:
+                exercises = exercises.filter(category_id=category_id)  # Фільтруємо по категорії, якщо параметр є
+
             serializer = ExerciseSerializer(exercises, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -114,12 +124,19 @@ class ExerciseView(APIView):
 class ArticleView(APIView):
     def get(self, request, article_id=None):
         payload = check_token(request)
+        category_id = request.query_params.get('category_id')  # Отримуємо параметр категорії
+
         if article_id:
             article = get_object_or_404(Article, id=article_id)
             serializer = ArticleSerializer(article)
         else:
             articles = Article.objects.all()
+
+            if category_id:
+                articles = articles.filter(category_id=category_id)  # Фільтруємо по категорії, якщо параметр є
+
             serializer = ArticleSerializer(articles, many=True)
+
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
