@@ -102,7 +102,7 @@ class LogoutView(APIView):
 class ExerciseView(APIView):
     def get(self, request, exercise_id=None):
         payload = check_token(request)
-        category_id = request.query_params.get('category_id')  # Отримуємо параметр категорії
+        category_id = request.query_params.get('category_id')
 
         if exercise_id:
             try:
@@ -115,11 +115,10 @@ class ExerciseView(APIView):
             exercises = Exercise.objects.all()
 
             if category_id:
-                exercises = exercises.filter(category_id=category_id)  # Фільтруємо по категорії, якщо параметр є
+                exercises = exercises.filter(category_id=category_id)
 
             serializer = ExerciseSerializer(exercises, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
-
 
 class ArticleView(APIView):
     def get(self, request, article_id=None):
