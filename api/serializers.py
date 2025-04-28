@@ -2,13 +2,13 @@ from rest_framework import serializers
 from .models import User
 from .models import Exercise
 from .models import User, Category, Article
-from .models import Test, Question, Answer, ResultTest
+from .models import Test, Question, Answer, ResultTest, Quotes
 
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['id', 'name', 'email', 'password']
+        fields = ['id', 'name', 'email', 'password', 'birth_date', 'gender', 'photo']
         extra_kwargs = {
             'password': {'write_only': True}
         }
@@ -36,6 +36,7 @@ class CategorySerializer(serializers.ModelSerializer):
 
 class ArticleSerializer(serializers.ModelSerializer):
     # author = serializers.HiddenField(default=serializers.CurrentUserDefault())
+    # category = CategorySerializer(read_only=True)
 
     class Meta:
         model = Article
@@ -58,6 +59,7 @@ class QuestionSerializer(serializers.ModelSerializer):
 
 class TestSerializer(serializers.ModelSerializer):
     questions = QuestionSerializer(many=True, read_only=True)
+    category = CategorySerializer(read_only=True)
 
     class Meta:
         model = Test
@@ -67,4 +69,10 @@ class TestSerializer(serializers.ModelSerializer):
 class TestResultSerializer(serializers.ModelSerializer):
     class Meta:
         model = ResultTest
+        fields = '__all__'
+
+
+class QuoteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Quotes
         fields = '__all__'

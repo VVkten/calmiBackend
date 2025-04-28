@@ -3,6 +3,7 @@ from django.apps import AppConfig
 from django.db import models
 from django.db.models import JSONField
 from django.contrib.auth.models import AbstractUser, BaseUserManager
+from django.utils import timezone
 
 
 class UserManager(BaseUserManager):
@@ -28,11 +29,20 @@ class UserManager(BaseUserManager):
 class User(AbstractUser):
     """Кастомний користувач Django без username, з авторизацією через email"""
 
+    GENDER_CHOICES = [
+        ('M', 'Чоловіча'),
+        ('F', 'Жіноча'),
+        ('O', 'Інша'),
+    ]
+
     name = models.CharField(max_length=255)
-    email = models.EmailField(unique=True)  # EmailField замість CharField
+    email = models.EmailField(unique=True)
     password = models.CharField(max_length=255)
-    username = None
     photo = models.ImageField(upload_to='user_photos/', blank=True, null=True)
+    birth_date = models.DateField(blank=True, null=True, verbose_name="Дата народження")
+    gender = models.CharField(max_length=1, choices=GENDER_CHOICES, blank=True, null=True, verbose_name="Стать")
+
+    username = None
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = []
@@ -57,9 +67,11 @@ class Exercise(models.Model):
     name = models.CharField(max_length=255)
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, related_name='exercise')
     author = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
-    image = models.ImageField(upload_to='exercise_images/')
     description = models.TextField()
-    video = models.FileField(upload_to='exercise_videos/', null=True, blank=True)
+    tags = models.CharField(max_length=255, blank=True, null=True)
+    breathing_pattern = models.JSONField(null=True, blank=True)
+    emoji = models.CharField(max_length=100, blank=True)
+    image = models.ImageField(upload_to='exercise_images/', default='exercise_images/default.png')
 
     def __str__(self):
         return self.name
@@ -67,14 +79,23 @@ class Exercise(models.Model):
 
 class Article(models.Model):
     """ Стаття """
+
+    GENDER_CHOICES_ART = [
+        ('M', 'Чоловіча'),
+        ('F', 'Жіноча'),
+        ('A', 'Всі'),
+    ]
+
     title = models.CharField(max_length=255)
     description = models.TextField()
     author = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
     tags = models.CharField(max_length=255, blank=True, null=True)
     category = models.ForeignKey(Category, on_delete=models.CASCADE)
+    sex_rec = models.CharField(max_length=1, choices=GENDER_CHOICES_ART, blank=True, null=True, verbose_name="Рекомендовано для певної статі")
 
     def __str__(self):
         return self.title
+
 
 class Test(models.Model):
     title = models.CharField(max_length=255)
@@ -113,3 +134,20 @@ class ResultTest(models.Model):
 
     def __str__(self):
         return f"Result for {self.test.title}"
+
+
+class ResultTestUser(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user')
+    test = models.ForeignKey(Test, on_delete=models.CASCADE, related_name='results_user')
+    result_data = models.CharField(max_length=255, blank=True)
+    passed_at = models.DateTimeField(default=timezone.now)
+
+    def __str__(self):
+        return f"Result {self.user.name} for {self.test.title} at {self.passed_at.strftime('%Y-%m-%d %H:%M')}"
+
+
+class Quotes(models.Model):
+    text = models.CharField(max_length=255)
+
+    def __str__(self):
+        return f"Цитата {self.text}"
