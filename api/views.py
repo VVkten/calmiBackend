@@ -3,8 +3,9 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.exceptions import AuthenticationFailed
 from .serializers import (UserSerializer, ExerciseSerializer, ArticleSerializer, CategorySerializer, TestSerializer,
-                          TestResultSerializer, AnswerSerializer, QuestionSerializer, QuoteSerializer)
-from .models import (User, Exercise, Article, Category, Test, ResultTest, Question, Quotes, ResultTestUser)
+                          TestResultSerializer, AnswerSerializer, QuestionSerializer, QuoteSerializer,
+                          TestResultUserSerializer, UserProfileSerializer)
+from .models import (User, Exercise, Article, Category, Test, ResultTest, Question, Quotes, ResultTestUser, UserProfile)
 import datetime
 from dotenv import load_dotenv
 import os
@@ -20,7 +21,7 @@ from django.conf import settings
 secret = os.getenv("SECRET")
 load_dotenv()
 
-verification_codes = {}  # Тимчасове сховище кодів, в проді — зберігати в моделі
+verification_codes = {}
 
 
 class SendCodeView(APIView):
@@ -33,15 +34,6 @@ class SendCodeView(APIView):
 
         code = random.randint(100000, 999999)
         verification_codes[email] = str(code)
-
-        # full_message = (f"""
-        #         Шановний користувач CalMi!
-        #         Ми отримали з вашої електронної адреси запит на відновлення паролю до акаунту: {str(email).lower()}
-        #
-        #         ВАШ КОД ПІДТВЕРДЖЕННЯ:
-        #         >>> {code} <<<
-        #         Нікому не повідомляйте цей код.
-        #         З повагою, Команда CalMi""")
 
         subject = "Скидання паролю"
 
@@ -87,7 +79,6 @@ class VerifyCodeView(APIView):
         if str(verification_codes.get(email)) != str(code):
             return Response({'error': 'Invalid code'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Створюємо тимчасовий токен (можна обмежити термін дії)
         payload = {
             'email': email,
             'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=10),
@@ -183,7 +174,47 @@ class LoginView(APIView):
         return response
 
 
+class VerifyPasswordView(APIView):
+    def post(self, request):
+        token = request.headers.get('Authorization')
+
+        if not token:
+            raise AuthenticationFailed('Unauthenticated!')
+
+        try:
+            token = token.split(' ')[1]
+            payload = jwt.decode(token, secret, algorithms=['HS256'])
+        except (jwt.ExpiredSignatureError, IndexError):
+            raise AuthenticationFailed('Unauthenticated!')
+
+        user = User.objects.filter(id=payload['id']).first()
+
+        if not user:
+            raise AuthenticationFailed('User not found')
+
+        password = request.data.get('password')
+        if not password or not user.check_password(password):
+            raise AuthenticationFailed('Invalid password')
+
+        return Response({'detail': 'Password is valid'}, status=200)
+
+
 class UserView(APIView):
+    def get_user_from_token(self, request):
+        token = request.headers.get('Authorization')
+        if not token:
+            raise AuthenticationFailed('Unauthenticated!')
+
+        try:
+            token = token.split(' ')[1]
+            payload = jwt.decode(token, secret, algorithms=['HS256'])
+        except (jwt.ExpiredSignatureError, IndexError):
+            raise AuthenticationFailed('Unauthenticated!')
+
+        user = User.objects.filter(id=payload['id']).first()
+        if not user:
+            raise AuthenticationFailed('User not found')
+        return user
     def get(self, request):
         token = request.headers.get('Authorization')
 
@@ -203,6 +234,41 @@ class UserView(APIView):
 
         serializer = UserSerializer(user)
         return Response(serializer.data)
+
+    def delete(self, request):
+        token = request.headers.get('Authorization')
+
+        if not token:
+            raise AuthenticationFailed('Unauthenticated!')
+
+        try:
+            token = token.split(' ')[1]
+            payload = jwt.decode(token, secret, algorithms=['HS256'])
+        except (jwt.ExpiredSignatureError, IndexError):
+            raise AuthenticationFailed('Unauthenticated!')
+
+        user = User.objects.filter(id=payload['id']).first()
+
+        if not user:
+            raise AuthenticationFailed('User not found')
+
+        user.delete()
+        return Response(status=204)
+
+    def patch(self, request):
+        user = self.get_user_from_token(request)
+        data = request.data
+
+        name = data.get('name')
+        email = data.get('email')
+
+        if name:
+            user.name = name
+        if email:
+            user.email = email
+
+        user.save()
+        return Response({'message': 'User updated'})
 
 
 class LogoutView(APIView):
@@ -380,3 +446,179 @@ class SaveResultTestUserView(APIView):
         )
 
         return Response({'message': 'Result saved successfully!'}, status=status.HTTP_201_CREATED)
+
+
+class LastTestResultView(APIView):
+    def get(self, request):
+        # Перевірка токена
+        payload = check_token(request)
+        user = get_object_or_404(User, id=payload['id'])  # Отримуємо користувача за ID з токена
+
+        # Отримуємо останній результат тесту для цього користувача
+        last_test_result = ResultTestUser.objects.filter(user=user).order_by('-passed_at').first()
+
+        if last_test_result is None:
+            return Response({"message": "No tests found for this user."}, status=404)
+
+        # Серіалізація результату
+        serializer = TestResultUserSerializer(last_test_result)
+        return Response(serializer.data)
+
+
+class UserProfileView(APIView):
+    def get(self, request):
+        payload = check_token(request)
+        if not payload:
+            return Response({'error': 'Unauthorized'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        user =  get_object_or_404(User, id=payload['id'])
+
+        profile, created = UserProfile.objects.get_or_create(user=user)
+        serializer = UserProfileSerializer(profile)
+        return Response(serializer.data)
+
+class SaveContentView(APIView):
+    def post(self, request):
+        payload = check_token(request)
+        if not payload:
+            return Response({'error': 'Unauthorized'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        user =  get_object_or_404(User, id=payload['id'])
+        profile, created = UserProfile.objects.get_or_create(user=user)
+
+        content_type = request.data.get('type')
+        content_id = request.data.get('id')
+
+        try:
+            if content_type == 'article':
+                content = Article.objects.get(id=content_id)
+                profile.saved_articles.add(content)
+            elif content_type == 'exercise':
+                content = Exercise.objects.get(id=content_id)
+                profile.saved_exercises.add(content)
+            elif content_type == 'test':
+                content = Test.objects.get(id=content_id)
+                profile.saved_tests.add(content)
+            else:
+                return Response({'error': 'Invalid content type'}, status=400)
+        except Exception as e:
+            return Response({'error': str(e)}, status=400)
+
+        return Response({'status': 'saved'})
+
+
+class SaveOrRemoveContentView(APIView):
+    def post(self, request):
+        payload = check_token(request)
+        if not payload:
+            return Response({'error': 'Unauthorized'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        user = get_object_or_404(User, id=payload['id'])
+        profile, created = UserProfile.objects.get_or_create(user=user)
+
+        content_type = request.data.get('type')
+        content_id = request.data.get('id')
+
+        try:
+            if content_type == 'article':
+                content = Article.objects.get(id=content_id)
+                if content in profile.saved_articles.all():
+                    profile.saved_articles.remove(content)
+                    return Response({'status': 'removed'})
+                else:
+                    profile.saved_articles.add(content)
+                    return Response({'status': 'saved'})
+
+            elif content_type == 'exercise':
+                content = Exercise.objects.get(id=content_id)
+                if content in profile.saved_exercises.all():
+                    profile.saved_exercises.remove(content)
+                    return Response({'status': 'removed'})
+                else:
+                    profile.saved_exercises.add(content)
+                    return Response({'status': 'saved'})
+
+            elif content_type == 'test':
+                content = Test.objects.get(id=content_id)
+                if content in profile.saved_tests.all():
+                    profile.saved_tests.remove(content)
+                    return Response({'status': 'removed'})
+                else:
+                    profile.saved_tests.add(content)
+                    return Response({'status': 'saved'})
+            else:
+                return Response({'error': 'Invalid content type'}, status=400)
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=400)
+
+
+class SavedContentView(APIView):
+    def get(self, request):
+        payload = check_token(request)
+        if not payload:
+            return Response({'error': 'Unauthorized'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        user = get_object_or_404(User, id=payload['id'])
+        profile = get_object_or_404(UserProfile, user=user)
+
+        # Отримуємо збережені статті, вправи та тести
+        saved_articles = profile.saved_articles.all()
+        saved_exercises = profile.saved_exercises.all()
+        saved_tests = profile.saved_tests.all()
+
+        # Сериалізація даних
+        article_serializer = ArticleSerializer(saved_articles, many=True)
+        exercise_serializer = ExerciseSerializer(saved_exercises, many=True)
+        test_serializer = TestSerializer(saved_tests, many=True)
+
+        return Response({
+            'saved_articles': article_serializer.data,
+            'saved_exercises': exercise_serializer.data,
+            'saved_tests': test_serializer.data
+        })
+
+
+class SavedArticlesView(APIView):
+    def get(self, request):
+        payload = check_token(request)
+        if not payload:
+            return Response({'error': 'Unauthorized'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        user = get_object_or_404(User, id=payload['id'])
+        profile = get_object_or_404(UserProfile, user=user)
+
+        # Fetch saved articles
+        saved_articles = profile.saved_articles.all()
+        serializer = ArticleSerializer(saved_articles, many=True)
+        return Response(serializer.data)
+
+
+class SavedExercisesView(APIView):
+    def get(self, request):
+        payload = check_token(request)
+        if not payload:
+            return Response({'error': 'Unauthorized'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        user = get_object_or_404(User, id=payload['id'])
+        profile = get_object_or_404(UserProfile, user=user)
+
+        # Fetch saved exercises
+        saved_exercises = profile.saved_exercises.all()
+        serializer = ExerciseSerializer(saved_exercises, many=True)
+        return Response(serializer.data)
+
+
+class SavedTestsView(APIView):
+    def get(self, request):
+        payload = check_token(request)
+        if not payload:
+            return Response({'error': 'Unauthorized'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        user = get_object_or_404(User, id=payload['id'])
+        profile = get_object_or_404(UserProfile, user=user)
+
+        # Fetch saved tests
+        saved_tests = profile.saved_tests.all()
+        serializer = TestSerializer(saved_tests, many=True)
+        return Response(serializer.data)

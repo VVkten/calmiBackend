@@ -8,7 +8,7 @@ urlpatterns = [
     path('login/', views.LoginView.as_view(), name='login'),
     path('user/', views.UserView.as_view(), name='user'),
     path('logout/', views.LogoutView.as_view(), name='logout'),
-
+    path('user/verify-password/', views.VerifyPasswordView.as_view()),
     # Password reset (2FA-like)
     path('send-code/', views.SendCodeView.as_view(), name='send_code'),
     path('verify-code/', views.VerifyCodeView.as_view(), name='verify_code'),
@@ -37,6 +37,15 @@ urlpatterns = [
     path('quotes/', views.RandomQuoteView.as_view(), name='quote'),
 
     path('save-result/<int:test_id>/', views.SaveResultTestUserView.as_view(), name='save_result'),
+    path('last_test_result/', views.LastTestResultView.as_view(), name='last_test_result'),
+
+    path('profile/', views.UserProfileView.as_view()),
+    path('save/', views.SaveContentView.as_view()),
+    path('save-content/', views.SaveOrRemoveContentView.as_view()),
+
+    path('save-articles/', views.SavedArticlesView.as_view()),
+    path('save-tests/', views.SavedTestsView.as_view()),
+    path('save-exercises/', views.SavedExercisesView.as_view()),
 
 ]
 
